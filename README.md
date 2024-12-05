@@ -157,22 +157,268 @@ Stopped at: 13:16
 
 ### Websocket configuration
 
-### Creating the communication channel to receive new messages
+Create the package config and the ``WebSocketConfiguration`` class. This config will implement the ``WebSocketMessageBroker
+Configurer``.
 
-### Preparing the message and sending the topic to Live Chat
+We need to use the @EnableWebSocketMessageBroker.
+
+With this interface we need to do an @Override in some methods (alt + insert -> override methods):
+
+1. configureMessageBroker
+2. registerStompEndPoints
+
+The first method that we are going to do is the registerStompEndPoints, let's see:
+
+#### registerStompEndPoints
+
+![img_8.png](img_8.png)
+
+As we can see, the connection between the browser and the application, a websocket api.
+
+We won't have a lot of routes in our API. We'll have only **ONE ROUTE**, **the websocket endpoint**! And inside this 
+endpoint we'll have the stomp frames.
+
+Inside our method we'll registry a new endpoint ``registry.addEndpoint("/buildrun-livechat")``
+
+#### configureMessageBroker
+
+Our application will have the websocket api, and we'll also have our **stomp broker**
+
+![img_9.png](img_9.png)
+
+As we said, we can have a lot of different types (rabbitMQ for example), we'll use a memory type (like an H2 database).
+
+Inside the method we'll use ``registry.enableSimpleBroker("/topics")`` inside the parameter will be the name of the topic.
+
+Another thing is that we can set the destination prefix, usando ``registry.setApplicationDestinationPrefixes("/app")``.
+
+### Creating the communication channel to receive new messages and Preparing the message and sending the topic to Live Chat
+
+We'll create a route, capable of receiving the message that the user is going to send the "send" stomp frame.
+
+When we receive this send stomp frame, we'll also receive: the username and the message. With that, we'll be able to
+publish in our stomp broker.
+
+Basically: we'll receive this payload with the Json with both information's, and we're going to send it to our stomp broker.
+
+<br>
+
+We'll create a new package (controller) with our class ``LiveChatController``. Since this is not a RESTful API, the only
+annotation will be @Controller.
+
+Inside the class we'll create a new method.
+
+First, we can define as ``public ? newMessage()``. This method will receive new messages, so we can create two records
+one for the request and other for the response.
+
+#### ChatInputRequest
+
+He needs the username and the message.
+
+#### ChatOutputResponse
+
+Just the content.
+
+#### Controller method
+
+Since this is a method to receive new messages, we can use the @MessageMapping (from Spring Boot with Websocket).
+
+We can indicate the endpoint inside of it, like ``/new-message``. The ideia now is to send this to the stomp broker, right?
+More specifically the ``topics/livechat``.
+
+To do that, after the @MessageMapping, we can use ``@SendTo("/topics/livechat")``.
+
+1. MessageMapping will receive the input (parameter)
+2. The return (ChatOutput), he will publish automatically with the ``@SendTo("url")``
+
+![img_10.png](img_10.png)
+
+⬆️ This is what is going to be shown on the frontend.
+
+We'll return a new ChatOutput, using the user from the input record + the message.
+
+**❗Quick tip:** we are getting the username and the message from the frontend, right? To have more security and less
+vulnerability, we can use ``HtmlUtils.htmlEscape()``.
 
 ### Importing frontend files (html, css & js) to our backend project
 
+[Github](https://github.com/buildrun-tech/buildrun-livechat-spring-boot-websocket-stomp/tree/main/src/main/resources)
+
+Import the static package inside our project (resource package).
+
 ### Testing the project locally
 
-### Understanding the details in the javascript code (STOMP.SJS)
+Start the app and access the localhost:8080 it should display the livechat.
+
+To check if the connection is working, open the browser console > to network > click connect.
+
+![img_11.png](img_11.png)
+
+⬆️ This is a bidirectional connection. If you click the buildrun-livechat > messages, we can see all the stomp frames (
+connection, subscribe).
+
+The red icon is the information that is coming back from the server.
+
+If we type a message and "send", it should appear a new stomp frame with message.
+
+### Understanding the details in the javascript code (STOMP.js)
+
+
+#### Connect method
+
+1. We create a const stompClient with the backend URL
+
+Defining the stomp client, using the API websocket route. This URL is the one that we used on the WebSocketConfig (
+registerStompEndpoints).
+
+```js
+const stompClient = new StompJs.Client({
+    brokerURL: 'ws://' + window.location.host + '/buildrun-livechat-websocket'
+});
+```
+
+2. We click on the connect button
+
+Some configurations and functions. When we click on the button he is going to call the function.
+
+```js
+$(function () {
+    $("form").on('submit', (e) => e.preventDefault());
+    $( "#connect" ).click(() => connect());
+    $( "#disconnect" ).click(() => disconnect());
+    $( "#send" ).click(() => sendMessage());
+});
+```
+
+2. He is going to call the connect() function
+
+```js
+function connect() {
+    stompClient.activate();
+}
+```
+
+3. The connect() is going to call the ``stompClient`` and active a listener (.onConnect)
+
+Connect listener. This listener receives a frame as a parameter, is going to set the connection true (changing the visuals), using
+the setConnect() function.
+
+```js
+stompClient.onConnect = (frame) => {
+    setConnected(true);
+    console.log('Connected: ' + frame);
+    stompClient.subscribe('/topics/livechat', (message) => {
+        updateLiveChat(JSON.parse(message.body).content);
+    });
+};
+```
+
+4. setConnected. If the connection works, is going to change the visuals (disabling connect button and showing panel)
+
+```js
+function setConnected(connected) {
+    $("#connect").prop("disabled", connected);
+    $("#disconnect").prop("disabled", !connected);
+    if (connected) {
+        $("#conversation").show();
+    }
+    else {
+        $("#conversation").hide();
+    }
+}
+```
+
+
+5. After that, he's going to go back to the listener (onConnect). He's going to show the console log and subscribes 
+the url topic inside our stomp broker (@SendTo) on the Controller
+
+```js
+stompClient.onConnect = (frame) => {
+    setConnected(true);
+    console.log('Connected: ' + frame);
+    stompClient.subscribe('/topics/livechat', (message) => {
+        updateLiveChat(JSON.parse(message.body).content);
+    });
+};
+```
+
+
+6. From now on, he's "listening" to every message. As soon as he gets a new message, he's going to update the "topics
+/livechat" with new messages
+
+#### Send method
+
+Uses stompClient and makes a ``publish`` is our application prefix.
+
+``/app`` It's inside our application (WebSocketConfig).
+
+``/new-message`` is on the Controller (@MessageMapping)
+
+After that he insert all the infos on the body: user and message (that's travelling to our Controller).
+
+```js
+function sendMessage() {
+    stompClient.publish({
+        destination: "/app/new-message",
+        body: JSON.stringify({'user': $("#user").val(), 'message': $("#message").val()})
+    });
+    $("#message").val("");
+}
+```
+
+He sends everything to our websocket and after that he cleans the input message.
+
+#### Disconnect method
+
+Calls the stompClient, using the function deactivate(), sets the ``setConnected()`` to false and shows a log on the 
+console.
+
+```js
+function disconnect() {
+    stompClient.deactivate();
+    setConnected(false);
+    console.log("Disconnected");
+}
+```
 
 ## AWS Deploy
 
 ### AWS Elastic Beanstalk configuration
 
+Watch [this](https://www.youtube.com/watch?v=bw85I5j2mss) video and write everything here.
+
 ### Generating JAR
+
+Go to application.properties, insert the ``server.port=${SERVER_PORT:5000}`` and generate a JAR file.
+
+Maven > project package > lifecycle > install 
 
 ### AWS deploy
 
-### Testing the project on other devices
+Search for elastic beanstalk -> create application -> ``livechatms`` -> create.
+
+Create environment -> webserver environment -> env name can be ``Livechatms=env`` -> domain -> ``buildrun-livechatms`` (
+check availability) -> platform: use java (21) -> application code: we'll upload our code -> localfile -> insert the JAR
+version label: 0.1 -> next.
+
+Configure service access
+
+Create and use new service role: livechat-service-role -> EC2 instance profile: crie ele abaixo e use-o -> next.
+
+Creating EC2
+
+Search for IAM -> roles -> create role -> aws service -> usecase: ec2 -> next -> select the policies -> next -> 
+rolename: livechat-ec2-service-role -> create role
+
+To know witch policie to use, go to beanstalk and click "view permission details"
+
+![img_12.png](img_12.png)
+
+There's more permissions when you scroll, use them.
+
+Go to the beanstalk, refresh it and use the created role -> next -> VPC: use the default -> public IP: activated and mark
+all the subnets -> next -> scroll -> fleet composition: spot instance -> next -> health reporting: basic -> platform
+updates: unmark it -> add enviroment property: now we define the server port: SERVER_PORT:5000 -> next -> submit and
+wait a few minutes.
+
+Now we can click the link and test the application.
