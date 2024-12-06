@@ -381,44 +381,154 @@ function disconnect() {
 }
 ```
 
-## AWS Deploy
+# AWS Deploy
 
-### AWS Elastic Beanstalk configuration
+## Application Environment
 
-Watch [this](https://www.youtube.com/watch?v=bw85I5j2mss) video and write everything here.
+## AWS Elastic Beanstalk configuration
 
-### Generating JAR
+This guide was made with [this video.](https://www.youtube.com/watch?v=bw85I5j2mss)
 
-Go to application.properties, insert the ``server.port=${SERVER_PORT:5000}`` and generate a JAR file.
+### What is Elastic Beanstalk?
 
-Maven > project package > lifecycle > install 
+Basically, it's like a coordinator inside the AWS, it's where we'll upload our code (JAR file).
 
-### AWS deploy
+The beanstalk will be responsible to "orchestrate" all resource creation. He'll create machines, net configuration,
+domain configuration... he'll encapsulate everything.
+
+To the elastic beanstalk be able to do that, our only responsibility will be to create some parameters.
+
+It's free, **but the resources that the beanstalk will create inside the AWS, needs to be paid!**
+
+#### Requirement
+
+The only requirement is that the application needs to run on the port 5000. Go to application.properties, insert 
+the ``server.port=${SERVER_PORT:8080}`` and generate a JAR file.
+
+We use :8080 as a default value. Create an enviroment variable and insert the 5000 value. 
+
+#### Generating JAR
+
+Maven > project package > lifecycle > install
+
+#### Creating application on the AWS Elastic Beanstalk
 
 Search for elastic beanstalk -> create application -> ``livechatms`` -> create.
 
-Create environment -> webserver environment -> env name can be ``Livechatms=env`` -> domain -> ``buildrun-livechatms`` (
-check availability) -> platform: use java (21) -> application code: we'll upload our code -> localfile -> insert the JAR
-version label: 0.1 -> next.
+Now, it's time for the environment. 
+-
+
+Technically, we can have two (minimum): one for developing and the production environment.
+
+Developing for tests/coding, production for the clients be able to use it.
+
+Create environment -> webserver environment -> environment name can be> ``Livechatms=env`` -> domain -> 
+``buildrun-livechatms`` (check availability) -> platform: use java (21) -> application code: we'll upload our code -> 
+localfile -> insert the JAR version label: 0.1 -> presets: single instance -> next.
 
 Configure service access
+-
 
-Create and use new service role: livechat-service-role -> EC2 instance profile: crie ele abaixo e use-o -> next.
+Create and use new service role: customAppName-service-role -> EC2 instance profile: crie ele abaixo e use-o -> next.
+
+Obs: we did not use an EC2 key pair since we didn't need any SSH access.
 
 Creating EC2
+-
 
-Search for IAM -> roles -> create role -> aws service -> usecase: ec2 -> next -> select the policies -> next -> 
-rolename: livechat-ec2-service-role -> create role
+Search for IAM -> roles -> create role -> aws service -> usecase: ec2 -> next -> select the policies -> next ->
+rolename: customAppName-ec2-service-role -> create role
 
-To know witch policie to use, go to beanstalk and click "view permission details"
+To know witch policie to use, go to beanstalk and click "view permission details".
 
 ![img_12.png](img_12.png)
 
 There's more permissions when you scroll, use them.
 
-Go to the beanstalk, refresh it and use the created role -> next -> VPC: use the default -> public IP: activated and mark
-all the subnets -> next -> scroll -> fleet composition: spot instance -> next -> health reporting: basic -> platform
-updates: unmark it -> add enviroment property: now we define the server port: SERVER_PORT:5000 -> next -> submit and
-wait a few minutes.
+Go back to the beanstalk, refresh it and use the created role -> next.
+
+Network and database config
+-
+
+VPC: use the default -> scroll
+
+##### Instance settings: 
+
+public IP: activate and mark all the subnets -> next
+
+##### Database
+
+Only use this if you want the application to interact with the database. Then, you would need to create one.
+
+Basically: enable database -> and make all the configs (engine, instance class, username/password, etc.)
+
+So, after setting this (or not), click -> go next.
+
+Configure instance traffic and scaling
+-
+
+Scroll > auto scaling group
+
+##### Auto scaling group
+
+Environment type: single instance
+
+Fleet composition: spot instance (the server will be cheaper) -> scroll
+
+Instance types: t3.micro and t3.small (free tier) -> next
+
+Configure updates, monitoring and logging
+-
+
+Health reporting: basic -> scroll
+
+Maneged platform updates: unmark it -> scroll
+
+Enviroment properties: now we define the server port -> add environment property
+
+SERVER_PORT:5000 -> next -> now you can review all the configs
+
+If it's ok, submit and wait a few minutes.
 
 Now we can click the link and test the application.
+
+## Production Environment
+
+Alright, we did an application environment, what about the production one?
+
+We can simply go to the application environment on AWS -> actions -> clone environment (he'll clone all the configs).
+
+Change the environment name (the end of it) to prod, like: appName-aws-prod.
+
+Domain: get the url (just the beginning) and change the end as well from "-dev" to "-prod".
+
+Description: change it, leave only saying that this one this the production one.
+
+Existing service role: same stuff from the other environment -> clone and wait a little bit.
+
+## Deploying new versions (after some changes)
+
+Imagine that we changed something in the code, what now? We need to deploy it to the "dev" environment first.
+
+Create a new JAR (maven install).
+
+Go to the AWS > Elastic beanstalk -> application.
+
+We can see both of them, right? Dev and prod! Wel, to the right we can see the "running versions" of it, let's update it.
+
+On the left side, click: application versions (this tab holds all the versions from our application). Click upload ->
+choose the new JAR file, change the version label (0.2 or higher) -> description: say what is changed -> upload.
+
+Now, in the application version tab, we'll have the new uploaded version. To deploy it, we can mark it -> actions ->
+deploy -> select the environment and wait.
+
+On the left side, we have "recent environments" -> click the one we made the deploy -> check the version he is using ->
+refresh until it's changed, and it'll be usable.
+
+Now that's working, we need to make the deploy **on the prod environment**.
+
+Basically we go back to application version, select the new one again -> actions -> select the prod environment
+
+## Ending the environment
+
+Go to applications -> actions -> delete application (it'll delete both environments).
