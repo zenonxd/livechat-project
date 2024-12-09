@@ -109,7 +109,7 @@ the API can send information to the browser).
 
 ![img_5.png](img_5.png)
 
-Since the connection has been set up, not we are going to make a **SECOND STOMP FRAME**, subscribe!
+Since the connection has been set up, now we are going to make a **SECOND STOMP FRAME**, subscribe!
 
 Our application wants to receive all the messages from this livechat, so we need to "subscribe" inside this livechat.
 
@@ -149,7 +149,11 @@ After that, the message will be rendered.
 
 ## Summary
 
-Stopped at: 13:16
+As soon as we start our application, Spring with Websocket API will create an instance of the Stomp Broker, that'll
+allow us to communicate with it (connecting, subscribing, sending).
+
+CONNECT to the Websocket API -> SUBSCRIBE to the topic "/livechat" -> SEND the message to the topic that we subscribed
+-> message goes to the browser.
 
 # Tasks
 
