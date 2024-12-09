@@ -13,6 +13,6 @@ public class LiveChatController {
     @MessageMapping("/new-message")
     @SendTo("/topics/livechat")
     public ChatOutputResponse newMessage(ChatInputRequest request) {
-        return new ChatOutputResponse(HtmlUtils.htmlEscape(request.username() + ": " + request.message()));
+        return new ChatOutputResponse(HtmlUtils.htmlEscape(request.user() + ": " + request.message()));
     }
 }
