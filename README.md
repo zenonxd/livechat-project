@@ -205,7 +205,7 @@ publish in our stomp broker.
 
 Basically: we'll receive this payload with the Json with both information's, and we're going to send it to our stomp broker.
 
-<br>
+<hr>
 
 We'll create a new package (controller) with our class ``LiveChatController``. Since this is not a RESTful API, the only
 annotation will be @Controller.
